@@ -45,7 +45,12 @@ export function entryIntent(market: Market, book: Book, prediction: Estimate, mi
     if (!top || top.price<=0 || market.feeRate===null) continue;
     // Only consume the best quoted level; integer quantities deliberately simplify v1.
     let quantity = Math.min(1000, Math.floor(top.quantity), Math.floor(POLICY.eventCap/top.price));
-    while (quantity>0 && (quantity*top.price+fee(quantity,top.price,market.feeRate)>POLICY.eventCap || probability-top.price/USD-(2*fee(quantity,top.price,market.feeRate))/(quantity*USD)<minimumEdge)) quantity--;
+    while (quantity>0) {
+      const cost=quantity*top.price+fee(quantity,top.price,market.feeRate);
+      const exit=sweep(bids(book,side),quantity,1,'sell',market.feeRate);
+      if(cost<=POLICY.eventCap && probability-top.price/USD-(2*fee(quantity,top.price,market.feeRate))/(quantity*USD)>=minimumEdge && exit.quantity===quantity && exit.net>cost*POLICY.stopRatio)break;
+      quantity--;
+    }
     if (!quantity) continue;
     const score = quantity*(probability*USD-top.price)-2*fee(quantity,top.price,market.feeRate);
     if (score>bestScore) {
@@ -71,6 +76,8 @@ export function approveAndFill(state: State, rawIntent: TradeIntent, market: Mar
   if (cost>POLICY.eventCap) reasons.push('Event cap exceeded');
   if (state.positions.reduce((a,p)=>a+p.cost,0)+cost>POLICY.totalCap) reasons.push('Portfolio commitment cap exceeded');
   if (cost>state.cash) reasons.push('Insufficient cash');
+  const initialExit=sweep(bids(book,intent.side),intent.quantity,1,'sell',market.feeRate??0.07);
+  if(initialExit.quantity<intent.quantity || initialExit.net<=cost*POLICY.stopRatio)reasons.push('Entry has insufficient exit depth or already crosses the loss trigger');
   const p = intent.side==='yes' ? prediction.probability : 1-prediction.probability;
   const minimumEdge = state.strategies.find(s=>s.id===state.activeStrategy)!.parameters.minimumEdge;
   if (p-intent.limitPrice/USD-2*fee(intent.quantity,intent.limitPrice,market.feeRate??0.07)/(intent.quantity*USD)<Math.max(minimumEdge,POLICY.minimumEdge)) reasons.push('Insufficient independently recomputed advantage');
