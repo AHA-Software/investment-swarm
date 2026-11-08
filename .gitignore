@@ -10,3 +10,5 @@ dist/
 .DS_Store
 **/__pycache__/
 modeling/.venv/
+.playwright-cli/
+output/playwright/
