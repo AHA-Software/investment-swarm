@@ -79,7 +79,7 @@ export function approveAndFill(state: State, rawIntent: TradeIntent, market: Mar
   if (execution.quantity) {
     state.cash -= execution.net;
     state.positions.push({id:randomUUID(), ticker:intent.ticker,event:intent.event,side:intent.side,quantity:execution.quantity,cost:execution.net,openedAt:now,strategyVersion:intent.strategyVersion});
-    for (const f of execution.fills) state.fills.push({id:randomUUID(),intentId:intent.id,ticker:intent.ticker,side:intent.side,action:'buy',...f,timestamp:now,realizedPnl:0});
+    for (const f of execution.fills) state.fills.push({id:randomUUID(),intentId:intent.id,ticker:intent.ticker,side:intent.side,action:'buy',...f,timestamp:now,realizedPnl:0,strategyVersion:intent.strategyVersion});
     consume(book,intent.side,'buy',execution.fills);
   }
   decision(state,intent.ticker,'execution',execution.quantity?'buy':'unfilled',[intent.rationale,`${execution.quantity}/${intent.quantity} contracts filled; remainder canceled (IOC).`],now,{intent,estimate:prediction});
@@ -102,7 +102,7 @@ export async function tick(store: Store, now = iso(), allowEntries = true) {
       if (market.result && market.status==='settled') {
         const payout = market.result===position.side ? position.quantity*USD : 0;
         state.cash += payout;
-        state.fills.push({id:randomUUID(),intentId:`settle-${position.id}`,ticker:position.ticker,side:position.side,action:'settle',quantity:position.quantity,price:market.result===position.side?USD:0,fee:0,timestamp:now,realizedPnl:payout-position.cost});
+        state.fills.push({id:randomUUID(),intentId:`settle-${position.id}`,ticker:position.ticker,side:position.side,action:'settle',quantity:position.quantity,price:market.result===position.side?USD:0,fee:0,timestamp:now,realizedPnl:payout-position.cost,strategyVersion:position.strategyVersion});
         state.positions = state.positions.filter(p=>p.id!==position.id);
         decision(state,position.ticker,'execution','settled',[`Official Kalshi result: ${market.result}`],now);
         continue;
@@ -128,7 +128,7 @@ export async function tick(store: Store, now = iso(), allowEntries = true) {
         execution.fills.forEach((f,index)=> {
           const cost = index===execution.fills.length-1 ? remainingCost : Math.floor(allocatedCost*f.quantity/execution.quantity);
           remainingCost -= cost;
-          state.fills.push({id:randomUUID(),intentId:`exit-${position.id}`,ticker:position.ticker,side:position.side,action:'sell',...f,timestamp:now,realizedPnl:f.price*f.quantity-f.fee-cost});
+          state.fills.push({id:randomUUID(),intentId:`exit-${position.id}`,ticker:position.ticker,side:position.side,action:'sell',...f,timestamp:now,realizedPnl:f.price*f.quantity-f.fee-cost,strategyVersion:position.strategyVersion});
         });
         position.quantity -= execution.quantity; position.cost -= allocatedCost;
         consume(book,position.side,'sell',execution.fills);

@@ -17,6 +17,12 @@ export const iso = () => new Date().toISOString();
 export const timestampSchema = z.string().datetime({ offset: true }).refine(v => Number.isFinite(Date.parse(v)), 'Invalid timestamp');
 export function validTime(value: string) { return timestampSchema.safeParse(value).success; }
 export const epoch = (value: string) => Date.parse(timestampSchema.parse(value));
+export function priorDate(date:string) { const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10); }
+export function weatherEvent(city: City, date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10)!==date) throw new Error('Invalid weather date');
+  const d=new Date(date+'T12:00:00Z'),months=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return `${CITIES[city].series}-${String(d.getUTCFullYear()).slice(-2)}${months[d.getUTCMonth()]}${String(d.getUTCDate()).padStart(2,'0')}`;
+}
 export function localDate(timestamp: string, timezone: string) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(timestamp));
   const val = (type: string) => parts.find(p => p.type === type)!.value;
@@ -46,7 +52,7 @@ export interface Position {
   id: string; ticker: string; event: string; side: Side; quantity: number;
   cost: number; openedAt: string; strategyVersion: string; exitReason?: string;
 }
-export interface Fill { id: string; intentId: string; ticker: string; side: Side; action: 'buy' | 'sell' | 'settle'; quantity: number; price: number; fee: number; timestamp: string; realizedPnl: number }
+export interface Fill { id: string; intentId: string; ticker: string; side: Side; action: 'buy' | 'sell' | 'settle'; quantity: number; price: number; fee: number; timestamp: string; realizedPnl: number; strategyVersion: string }
 export interface Decision { id: string; timestamp: string; ticker: string; agent: string; action: string; reasons: string[]; intent?: TradeIntent; estimate?: Estimate }
 export interface Strategy { id: string; status: 'candidate' | 'approved' | 'retired'; createdAt: string; approvedAt?: string; notes: string; parameters: { minimumEdge: number }; evidence?: Record<string, unknown> }
 export interface State {

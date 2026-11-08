@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { CITIES, epoch, initialState, iso, localDate, validTime, type State, type Market, type Book, type Forecast, type TrainingSample } from './domain.js';
+import { CITIES, epoch, initialState, iso, localDate, priorDate, validTime, weatherEvent, type State, type Market, type Book, type Forecast, type TrainingSample } from './domain.js';
 
 interface Query { query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }> }
 interface Database extends Query { transaction<T>(fn: (tx: Query) => Promise<T>): Promise<T>; close(): Promise<void> }
@@ -62,9 +62,9 @@ export class Store {
     return r.rows.map(r => r.payload as T);
   }
   async addSample(sample: TrainingSample) {
-    if (!CITIES[sample.city] || !/^\d{4}-\d{2}-\d{2}$/.test(sample.date) || !sample.source || !sample.rulesHash || sample.station!==CITIES[sample.city].climateStation || !sample.event.startsWith(CITIES[sample.city].series+'-')) throw new Error('Training sample does not match approved contract metadata');
+    if (!CITIES[sample.city] || !sample.source || !sample.rulesHash || sample.station!==CITIES[sample.city].climateStation || sample.event!==weatherEvent(sample.city,sample.date)) throw new Error('Training sample does not match approved contract metadata');
     if (![sample.forecastReceivedAt,sample.forecastPublishedAt,sample.settledAt].every(validTime)) throw new Error('Invalid training timestamp');
-    if (localDate(sample.forecastReceivedAt,CITIES[sample.city].timezone)>=sample.date || localDate(sample.forecastPublishedAt,CITIES[sample.city].timezone)>=sample.date) throw new Error('Training forecast is not a day-ahead vintage');
+    if (localDate(sample.forecastReceivedAt,CITIES[sample.city].timezone)!==priorDate(sample.date) || localDate(sample.forecastPublishedAt,CITIES[sample.city].timezone)>=sample.date) throw new Error('Training forecast is not a day-ahead vintage');
     if (![sample.forecastHigh, sample.observedHigh].every(Number.isFinite)) throw new Error('Invalid training temperatures');
     if (epoch(sample.forecastReceivedAt) >= epoch(sample.settledAt) || epoch(sample.forecastPublishedAt) > epoch(sample.forecastReceivedAt)) throw new Error('Training sample contains future information');
     await this.db.query('INSERT INTO samples VALUES($1,$2,$3::jsonb) ON CONFLICT DO NOTHING', [sample.city, sample.date, JSON.stringify(sample)]);
