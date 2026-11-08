@@ -1,0 +1,10 @@
+import { randomUUID } from 'node:crypto';
+import { dollar, initialState, type Book, type Estimate, type Forecast, type Market, type TrainingSample, type TradeIntent } from '../src/domain.js';
+export const NOW='2026-11-08T18:00:00.000Z';
+export const market=(overrides:Partial<Market>={}):Market=>({ticker:'KXHIGHNY-26NOV09-B65',event:'KXHIGHNY-26NOV09',city:'nyc',date:'2026-11-09',title:'NYC 64–67',closeAt:'2026-11-10T04:59:00.000Z',status:'active',rules:'Known rules',rulesHash:'verified',source:'The Weather Company',station:'CLINYC',lower:64,upper:67,rulesVerified:true,feeRate:0.07,...overrides});
+export const book=(overrides:Partial<Book>={}):Book=>({ticker:market().ticker,receivedAt:NOW,yes:[{price:dollar(0.35),quantity:100}],no:[{price:dollar(0.6),quantity:100}],source:'rest',valid:true,...overrides});
+export const forecast=(overrides:Partial<Forecast>={}):Forecast=>({city:'nyc',date:'2026-11-09',highF:65,publishedAt:NOW,receivedAt:NOW,complete:true,periods:24,...overrides});
+export const prediction=(overrides:Partial<Estimate>={}):Estimate=>({ticker:market().ticker,probability:0.8,sigma:2,bias:0,samples:40,modelVersion:'forecast-residual-v1',availableAt:NOW,trainedThrough:'2026-11-07T23:00:00.000Z',...overrides});
+export const intent=(overrides:Partial<TradeIntent>={}):TradeIntent=>({id:randomUUID(),ticker:market().ticker,event:market().event,side:'yes',quantity:10,limitPrice:dollar(0.4),probability:0.8,strategyVersion:'forecast-residual-v1',createdAt:NOW,expiresAt:'2026-11-08T18:00:05.000Z',rationale:'Test',rulesHash:'verified',...overrides});
+export function samples(count=40):TrainingSample[] {return Array.from({length:count},(_,i)=>{const date=new Date(Date.parse(NOW)-(i+2)*86400000).toISOString().slice(0,10);const before=new Date(Date.parse(date+'T18:00:00Z')-86400000).toISOString();return {city:'nyc',station:'CLINYC',event:`KXHIGHNY-${date}`,source:'The Weather Company',rulesHash:'verified',date,forecastHigh:65,observedHigh:65+[-2,-1,0,1,2][i%5]!,forecastPublishedAt:before,forecastReceivedAt:before,settledAt:date+'T23:00:00.000Z',horizon:'day-ahead'};});}
+export const state=()=>initialState(NOW);
