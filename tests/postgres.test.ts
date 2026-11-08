@@ -22,6 +22,6 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('real PostgreSQL contention',()=
       }));
       expect(results.filter(r=>r.approved).length).toBeGreaterThan(0);const state=await a.state();expect(state.positions.reduce((n,p)=>n+p.cost,0)).toBeLessThanOrEqual(POLICY.totalCap);expect(state.cash).toBeGreaterThanOrEqual(dollar(75));
       const secondBucket=market({ticker:'KXHIGHNY-26NOV09-T63'});const r=await b.mutate(s=>approveAndFill(s,intent({ticker:secondBucket.ticker}),secondBucket,book({ticker:secondBucket.ticker}),forecast(),prediction({ticker:secondBucket.ticker}),NOW));expect(r.approved).toBe(false);
-    }finally{await a?.close();await b?.close();await parent.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);await parent.end();}
+    }finally{await a?.close();await b?.close();await parent.query(`DROP DATABASE IF EXISTS "${name}"`);await parent.end();}
   },30000);
 });

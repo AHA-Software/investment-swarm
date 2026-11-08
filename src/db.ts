@@ -11,8 +11,16 @@ export class Store {
   static async open(options: { directory?: string; url?: string; fixture?: boolean } = {}) {
     let db: Database;
     if (options.url) {
-      const pool = new pg.Pool({ connectionString: options.url, max: 5 });
-      db = { query: (s, p) => pool.query(s, p), close: () => pool.end(), transaction: async fn => {
+      const pool = new pg.Pool({ connectionString: options.url, max: 5, connectionTimeoutMillis: 5000, query_timeout: 15000 });
+      const clients=new Set<pg.PoolClient>();
+      pool.on('connect',client=>{clients.add(client);client.once('end',()=>clients.delete(client));});
+      pool.on('error',()=>{console.error('PostgreSQL idle connection lost; new operations will reconnect.');});
+      const close=async()=>{
+        // pg-pool may resolve end() before the sockets emit end. Wait for both.
+        const socketsClosed=[...clients].map(client=>new Promise<void>(resolve=>client.once('end',resolve)));
+        await pool.end();await Promise.all(socketsClosed);
+      };
+      db = { query: (s, p) => pool.query(s, p), close, transaction: async fn => {
         const c = await pool.connect();
         try { await c.query('BEGIN'); const result = await fn(c); await c.query('COMMIT'); return result; }
         catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
@@ -71,6 +79,7 @@ export class Store {
   }
   async samples(): Promise<TrainingSample[]> { const r = await this.db.query('SELECT payload FROM samples ORDER BY date,city'); return r.rows.map(r => r.payload as TrainingSample); }
   async audit<T>(kind: string): Promise<T[]> { const r = await this.db.query('SELECT payload FROM audit_log WHERE kind=$1 ORDER BY at,id',[kind]); return r.rows.map(r=>r.payload as T); }
+  async health() { const r=await this.db.query("SELECT DISTINCT ON (key) key,payload FROM snapshots WHERE kind='health' ORDER BY key,received_at DESC,id DESC");return r.rows.map(row=>({service:row.key,...row.payload as Record<string,unknown>})); }
   markets() { return this.latest<Market>('market'); }
   books() { return this.latest<Book>('book'); }
   forecasts() { return this.latest<Forecast>('forecast'); }
