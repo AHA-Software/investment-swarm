@@ -51,6 +51,7 @@ export type TradeIntent = z.infer<typeof intentSchema>;
 export interface Position {
   id: string; ticker: string; event: string; side: Side; quantity: number;
   cost: number; openedAt: string; strategyVersion: string; exitReason?: string;
+  eventGroup?: string;
 }
 export interface Fill { id: string; intentId: string; ticker: string; side: Side; action: 'buy' | 'sell' | 'settle'; quantity: number; price: number; fee: number; timestamp: string; realizedPnl: number; strategyVersion: string }
 export interface Decision { id: string; timestamp: string; ticker: string; agent: string; action: string; reasons: string[]; intent?: TradeIntent; estimate?: Estimate }

@@ -71,7 +71,8 @@ export function approveAndFill(state: State, rawIntent: TradeIntent, market: Mar
   if (intent.rulesHash!==market.rulesHash) reasons.push('Contract rules changed');
   if (intent.strategyVersion!==state.activeStrategy || !state.strategies.some(s=>s.id===intent.strategyVersion && s.status==='approved')) reasons.push('Strategy is not the approved active version');
   if (Date.parse(intent.expiresAt)<=Date.parse(now) || Date.parse(intent.createdAt)>Date.parse(now)) reasons.push('Expired or future intent');
-  if (state.eventLocks.includes(intent.event) || state.positions.some(p=>p.event===intent.event)) reasons.push('Event already held or locked after exit');
+  const eventGroup=`${market.city}:${market.date}`;
+  if (state.eventLocks.includes(intent.event) || state.eventLocks.includes(eventGroup) || state.positions.some(p=>p.event===intent.event || p.eventGroup===eventGroup)) reasons.push('Event already held or locked after exit');
   const cost = intent.quantity*intent.limitPrice+fee(intent.quantity,intent.limitPrice,market.feeRate??0.07);
   if (cost>POLICY.eventCap) reasons.push('Event cap exceeded');
   if (state.positions.reduce((a,p)=>a+p.cost,0)+cost>POLICY.totalCap) reasons.push('Portfolio commitment cap exceeded');
@@ -85,7 +86,7 @@ export function approveAndFill(state: State, rawIntent: TradeIntent, market: Mar
   const execution = sweep(asks(book,intent.side),intent.quantity,intent.limitPrice,'buy',market.feeRate!);
   if (execution.quantity) {
     state.cash -= execution.net;
-    state.positions.push({id:randomUUID(), ticker:intent.ticker,event:intent.event,side:intent.side,quantity:execution.quantity,cost:execution.net,openedAt:now,strategyVersion:intent.strategyVersion});
+    state.positions.push({id:randomUUID(), ticker:intent.ticker,event:intent.event,eventGroup,side:intent.side,quantity:execution.quantity,cost:execution.net,openedAt:now,strategyVersion:intent.strategyVersion});
     for (const f of execution.fills) state.fills.push({id:randomUUID(),intentId:intent.id,ticker:intent.ticker,side:intent.side,action:'buy',...f,timestamp:now,realizedPnl:0,strategyVersion:intent.strategyVersion});
     consume(book,intent.side,'buy',execution.fills);
   }
@@ -125,6 +126,7 @@ export async function tick(store: Store, now = iso(), allowEntries = true) {
       }
       if (!position.exitReason) continue;
       if (!state.eventLocks.includes(position.event)) state.eventLocks.push(position.event);
+      if (position.eventGroup&&!state.eventLocks.includes(position.eventGroup))state.eventLocks.push(position.eventGroup);
       if (!fresh || !book || !['active','open'].includes(market.status) || !validTime(market.closeAt) || epoch(market.closeAt)<=epoch(now)) { decision(state,position.ticker,'execution','exit_pending',[position.exitReason,'No fresh executable market; continue monitoring.'],now); continue; }
       const execution = sweep(bids(book,position.side),position.quantity,1,'sell',market.feeRate??0.07);
       if (execution.quantity) {
@@ -148,7 +150,8 @@ export async function tick(store: Store, now = iso(), allowEntries = true) {
       const candidates: {market:Market;book:Book;forecast:Forecast;prediction:Estimate;intent:TradeIntent}[] = [];
       const strategy = state.strategies.find(s=>s.id===state.activeStrategy)!;
       for (const market of markets) {
-        if (state.eventLocks.includes(market.event) || state.positions.some(p=>p.event===market.event)) continue;
+        const group=`${market.city}:${market.date}`;
+        if (state.eventLocks.includes(market.event) || state.eventLocks.includes(group) || state.positions.some(p=>p.event===market.event || p.eventGroup===group)) continue;
         const book = books.find(b=>b.ticker===market.ticker), forecast = forecasts.find(f=>f.city===market.city && f.date===market.date);
         const prediction = forecast ? estimate(market,forecast,samples,now,state.activeStrategy,state.fixture) : undefined;
         const issues = evidenceIssues(market,forecast,book,prediction,now);
