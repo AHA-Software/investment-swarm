@@ -1,0 +1,41 @@
+{
+  "name": "investment-swarm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kalshi weather research swarm with a deterministic paper-trading engine",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "dev": "tsx src/cli.ts dashboard",
+    "start": "tsx src/cli.ts dashboard",
+    "swarm": "tsx src/cli.ts",
+    "demo": "tsx src/cli.ts demo",
+    "collect": "tsx src/cli.ts collect --once",
+    "paper": "tsx src/cli.ts paper",
+    "mcp:check": "tsx src/cli.ts mcp",
+    "agent:dev": "eve dev",
+    "agent:build": "eve build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:python": "uv run --project modeling python -m unittest discover -s modeling/tests",
+    "check": "npm run typecheck && npm test && npm run test:python"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ai": "^7.0.137",
+    "decimal.js": "^10.6.0",
+    "eve": "1.0.0-rc.6",
+    "pg": "^8.23.1",
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

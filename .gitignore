@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+data/
+.eve/
+.output/
+.vercel/
+coverage/
+dist/
+.DS_Store
+**/__pycache__/
+modeling/.venv/
