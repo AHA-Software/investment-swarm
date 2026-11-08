@@ -14,3 +14,11 @@ attempt to exit, not a guaranteed sale. Missing bids mean zero liquidation value
 Research uses the official Kalshi MCP connector. Streaming and historical
 collection use REST/WebSockets. The MCP connector cannot submit or cancel orders.
 Do not expose private keys or unrestricted shell tools to the research agents.
+
+Read `docs/PLAN.md` for agreed scope and milestones, `FOUNDATION.md` for enduring
+invariants, and `README.md` for setup. Document implemented versus planned work
+honestly. Keep verification results in `docs/VERIFICATION.md` current when rerun.
+
+Commit completed, verified work in logical chunks using conventional commit
+messages (`feat`, `fix`, `test`, `docs`, `chore` with an optional scope). Do not
+stage unrelated work or push unless explicitly requested.
