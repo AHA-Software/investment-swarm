@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { CITIES, USD, iso, type City, type Market, type Book, type Level } from './domain.js';
+import { CITIES, USD, iso, epoch, timestampSchema, type City, type Market, type Book, type Level } from './domain.js';
 import { parsePrice } from './math.js';
 
 export const marketSchema = z.object({ ticker: z.string(), event_ticker: z.string(), title: z.string(), close_time: z.string().datetime(), status: z.string(), rules_primary: z.string(), rules_secondary: z.string().default(''), strike_type: z.string(), floor_strike: z.number().nullable().optional(), cap_strike: z.number().nullable().optional(), result: z.string().optional(), expiration_value: z.string().optional() }).passthrough();
@@ -36,6 +36,7 @@ export function normalizeLevels(input: unknown): Level[] {
   }).filter(l => l.quantity > 0).sort((a,b) => b.price-a.price);
 }
 export function normalizeBook(ticker: string, raw: unknown, receivedAt = iso()): Book {
+  timestampSchema.parse(receivedAt);
   const parsed = z.object({ orderbook_fp: z.object({ yes_dollars: z.array(fpLevel).nullable(), no_dollars: z.array(fpLevel).nullable() }) }).parse(raw);
   const yes = normalizeLevels(parsed.orderbook_fp.yes_dollars ?? []), no = normalizeLevels(parsed.orderbook_fp.no_dollars ?? []);
   return { ticker, receivedAt, yes, no, source: 'rest', valid: (yes[0]?.price ?? 0) + (no[0]?.price ?? 0) < USD };
@@ -70,13 +71,27 @@ export class KalshiData {
     return all;
   }
   async feeRate(city: City): Promise<number | null> {
-    const r = z.object({ series: z.object({ fee_type: z.string(), fee_multiplier: z.number() }) }).parse(await this.get(`/series/${CITIES[city].series}`));
+    const r = z.object({ series: z.object({ fee_type: z.string(), fee_multiplier: z.number().finite().nonnegative() }) }).parse(await this.get(`/series/${CITIES[city].series}`));
     // v1 only supports the ordinary quadratic taker schedule. Unknown models fail closed.
     return r.series.fee_type === 'quadratic' ? 0.07 * r.series.fee_multiplier : null;
   }
+  async eventFeeRate(event:string,seriesRate:number|null,now=iso()):Promise<number|null> {
+    const changes:{scheduled_ts:string;fee_type_override:string|null;fee_multiplier_override:number|null}[]=[];let cursor='';
+    do {
+      const params=new URLSearchParams({event_ticker:event,limit:'200',...(cursor?{cursor}:{})});
+      const data=z.object({cursor:z.string(),event_fee_changes:z.array(z.object({scheduled_ts:timestampSchema,fee_type_override:z.string().nullable(),fee_multiplier_override:z.number().finite().nonnegative().nullable()}))}).parse(await this.get(`/events/fee_changes?${params}`));
+      changes.push(...data.event_fee_changes);cursor=data.cursor;if(changes.length>5000)throw new Error('Too many fee changes');
+    }while(cursor);
+    const active=changes.filter(c=>epoch(c.scheduled_ts)<=epoch(now)).sort((a,b)=>epoch(b.scheduled_ts)-epoch(a.scheduled_ts))[0];
+    if(!active)return seriesRate;
+    if(active.fee_type_override!==null&&active.fee_type_override!=='quadratic')return null;
+    return active.fee_multiplier_override===null?seriesRate:0.07*active.fee_multiplier_override;
+  }
   async book(ticker: string) { return normalizeBook(ticker, await this.get(`/markets/${encodeURIComponent(ticker)}/orderbook?depth=100`)); }
   async market(ticker: string, city: City, feeRate: number | null) {
-    const r = z.object({ market: z.unknown() }).parse(await this.get(`/markets/${encodeURIComponent(ticker)}`));
+    let raw:unknown;
+    try{raw=await this.get(`/markets/${encodeURIComponent(ticker)}`);}catch{raw=await this.get(`/historical/markets/${encodeURIComponent(ticker)}`);}
+    const r = z.object({ market: z.unknown() }).parse(raw);
     return normalizeMarket(r.market, city, feeRate);
   }
 }

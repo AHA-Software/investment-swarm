@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "kalshi-research": { "type": "http", "url": "https://api.elections.kalshi.com/mcp" }
+  }
+}
